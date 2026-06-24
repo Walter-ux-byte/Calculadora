@@ -39,12 +39,16 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install buildozer cython virtualenv pycparser
 
-      - name: Create Buildozer Config Cache Directory
-        run: mkdir -p ~/.buildozer
+      - name: Limpiar compilaciones corruptas previas (Caché vieja)
+        run: |
+          rm -rf .buildozer/android/platform/build-arm64-v8a_armeabi-v7a
+          rm -rf .buildozer/android/platform/python-for-android
+          mkdir -p ~/.buildozer
 
       - name: Build APK
         run: |
           set -o pipefail
+          # Se aceptan las licencias primero y luego se fuerza la compilación limpia
           yes | buildozer android debug 2>&1 | tee build.log
         continue-on-error: false
 
