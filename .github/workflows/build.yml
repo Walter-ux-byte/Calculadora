@@ -34,6 +34,9 @@ jobs:
             libjpeg-dev libpng-dev \
             libffi-dev python3-dev
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
@@ -42,19 +45,15 @@ jobs:
           pip install python-for-android
           pip install buildozer
 
-      - name: Pre-configure Buildozer SDK and Enforce Licenses
+      - name: Pre-Accept SDK Licenses & Enforce Build Tools
         run: |
-          SYSTEM_SDK="/usr/local/lib/android/sdk"
-          SYSTEM_SDKMANAGER="${SYSTEM_SDK}/cmdline-tools/latest/bin/sdkmanager"
+          # Usamos el sdkmanager del sistema configurado por la acción oficial
+          yes | sdkmanager --licenses || true
+          yes | sdkmanager "build-tools;33.0.2" "build-tools;37.0.0" "platforms;android-33" "platform-tools" || true
           
-          yes | "$SYSTEM_SDKMANAGER" --licenses || true
-          
-          LOCAL_SDK_DIR="/home/runner/.buildozer/android/platform/android-sdk"
-          mkdir -p "${LOCAL_SDK_DIR}/tools/bin"
-          mkdir -p "${LOCAL_SDK_DIR}/licenses"
-          
-          cp -r ${SYSTEM_SDK}/licenses/* "${LOCAL_SDK_DIR}/licenses/" || true
-          ln -s "$SYSTEM_SDKMANAGER" "${LOCAL_SDK_DIR}/tools/bin/sdkmanager" || true
+          # Forzamos a Buildozer a ver las licencias del sistema directamente en su raíz
+          mkdir -p ~/.buildozer/android/platform/android-sdk/
+          ln -s $ANDROID_HOME/licenses ~/.buildozer/android/platform/android-sdk/licenses || true
 
       - name: Cache Buildozer global directory
         uses: actions/cache@v4
@@ -67,23 +66,25 @@ jobs:
       - name: Clean previous local build artifacts
         run: |
           rm -rf bin
-          # Forzamos la limpieza interna de recetas viejas para evitar conflictos de caché
           rm -rf .buildozer/android/platform/build-*
 
-      - name: Build APK
+      - name: Build APK with Error Capture
         run: |
-          buildozer android debug
+          # Guardamos el output en un log por si falla
+          buildozer --verbose android debug > buildozer_output.log 2>&1
+
+      - name: Print Error Log on Failure
+        if: failure()
+        run: |
+          echo "======================================================================"
+          echo "    ERROR DETECTADO EN LA COMPILACIÓN DE BUILDOZER:"
+          echo "======================================================================"
+          tail -n 200 buildozer_output.log
+          echo "======================================================================"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: calculadora-apk
           path: bin/*.apk
-
-      - name: Upload Build Logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs
-          path: .buildozer/android/platform/build-*/build/other_builds/
-          if-no-files-found: ignore
