@@ -41,25 +41,6 @@ jobs:
           pip install python-for-android
           pip install buildozer
 
-      - name: Configure Android SDK, NDK and Pre-accept Licenses
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-        run: |
-          SDKMANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-
-          # 1. Aceptar las licencias en el SDK del sistema
-          yes | "${SDKMANAGER}" --licenses || true
-
-          # 2. Exportar las rutas globales para que Buildozer las use directamente
-          # Esto evita que intente recrear el SDK dentro de su propia carpeta .buildozer
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/25.2.9519653" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=${ANDROID_SDK_ROOT}/ndk/25.2.9519653" >> $GITHUB_ENV
-          
-          # Forzar a python-for-android/buildozer a apuntar al SDK correcto mediante variables de sistema
-          echo "P4A_ANDROID_SDK=${ANDROID_SDK_ROOT}" >> $GITHUB_ENV
-          echo "P4A_ANDROID_NDK=${ANDROID_SDK_ROOT}/ndk/25.2.9519653" >> $GITHUB_ENV
-
       - name: Cache Buildozer global directory
         uses: actions/cache@v4
         with:
@@ -72,12 +53,33 @@ jobs:
         run: |
           rm -rf bin
 
-      - name: Build APK
-        env:
-          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/25.2.9519653
+      - name: Build APK with Auto-Licensing
         run: |
-          # Ejecutamos la compilación pasándole explícitamente las rutas correctas del SDK
+          # 1. Forzamos a Buildozer a preparar su SDK local interno
+          buildozer android web || true
+          
+          # 2. Ahora que Buildozer creó su propia ruta del SDK, localizamos su sdkmanager interno
+          LOCAL_SDK="/home/runner/.buildozer/android/platform/android-sdk"
+          
+          # 3. Si Buildozer descargó la versión moderna de cmdline-tools, usamos esa. Si no, la tradicional.
+          if [ -f "$LOCAL_SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            LOCAL_SDKMANAGER="$LOCAL_SDK/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -f "$LOCAL_SDK/tools/bin/sdkmanager" ]; then
+            LOCAL_SDKMANAGER="$LOCAL_SDK/tools/bin/sdkmanager"
+          else
+            # Si no ha descargado nada aún, creamos manualmente la carpeta de licencias para prevenir el error
+            mkdir -p "$LOCAL_SDK/licenses"
+            # Copiamos las licencias pre-aceptadas del sistema de GitHub Actions directamente a Buildozer
+            cp -r /usr/local/lib/android/sdk/licenses/* "$LOCAL_SDK/licenses/" || true
+          fi
+          
+          # 4. Si el sdkmanager interno existe, le obligamos a aceptar la licencia 37 en su propia cara
+          if [ ! -z "$LOCAL_SDKMANAGER" ]; then
+            yes | "$LOCAL_SDKMANAGER" --licenses || true
+            yes | "$LOCAL_SDKMANAGER" "build-tools;37.0.0" || true
+          fi
+
+          # 5. Ejecutamos la compilación real. Ya no se detendrá por licencias.
           buildozer android debug
 
       - name: Upload APK
