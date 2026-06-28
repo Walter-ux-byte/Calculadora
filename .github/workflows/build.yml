@@ -13,6 +13,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Java 17
+        # CORRECCIÓN PRINCIPAL: forzar Java 17 globalmente desde el inicio.
+        # El log muestra que JAVA_HOME apuntaba a temurin-11, pero el sdkmanager
+        # moderno fue compilado con Java 17 (class file version 61.0) y falla
+        # con "UnsupportedClassVersionError" bajo Java 11 (max version 55.0).
+        # El runner ya tiene Java 17 en JAVA_HOME_17_X64; solo hay que activarlo.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -22,7 +33,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y \
-            git zip unzip openjdk-17-jdk \
+            git zip unzip \
             build-essential libstdc++-12-dev \
             autoconf automake libtool libtool-bin m4 \
             pkg-config \
@@ -49,39 +60,29 @@ jobs:
           restore-keys: |
             buildozer-${{ runner.os }}-
 
-      - name: Bootstrap Android SDK inside Buildozer's path
-        # CAUSA RAÍZ (línea 51 del log):
-        # Buildozer busca sdkmanager en:
-        #   ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
-        # Pero ese directorio no existe porque buildozer solo crea la carpeta
-        # vacía del SDK y no instala cmdline-tools.
-        #
-        # SOLUCIÓN: descargar cmdline-tools e instalarlo exactamente donde
-        # buildozer lo busca, luego usar ese sdkmanager para instalar
-        # build-tools, platforms y aceptar todas las licencias.
+      - name: Bootstrap Android SDK in Buildozer's path
+        # Buildozer usa su propio SDK en ~/.buildozer/android/platform/android-sdk
+        # e ignora el SDK del sistema. Hay que instalar cmdline-tools ahí
+        # y usar Java 17 (ya activo por el paso anterior) para que sdkmanager funcione.
         run: |
           BUILDOZER_SDK="${HOME}/.buildozer/android/platform/android-sdk"
           mkdir -p "${BUILDOZER_SDK}"
 
-          # 1. Descargar cmdline-tools (versión estable de Google)
-          CMDLINE_TOOLS_URL="https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip"
-          wget -q "${CMDLINE_TOOLS_URL}" -O /tmp/cmdline-tools.zip
+          # 1. Descargar cmdline-tools de Google
+          wget -q "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip" \
+            -O /tmp/cmdline-tools.zip
 
-          # 2. Descomprimir en la ubicación temporal
-          mkdir -p /tmp/cmdline-tools-extract
-          unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools-extract
-
-          # 3. Instalar en la ruta legacy que buildozer usa: android-sdk/tools/
-          #    (buildozer busca tools/bin/sdkmanager, NO cmdline-tools/latest/bin/sdkmanager)
+          # 2. Instalar en la ruta legacy que buildozer espera: tools/bin/sdkmanager
+          mkdir -p /tmp/ct-extract
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/ct-extract
           mkdir -p "${BUILDOZER_SDK}/tools"
-          cp -r /tmp/cmdline-tools-extract/cmdline-tools/* "${BUILDOZER_SDK}/tools/"
+          cp -r /tmp/ct-extract/cmdline-tools/* "${BUILDOZER_SDK}/tools/"
 
-          # 4. Verificar que sdkmanager existe en la ruta correcta
           SDKMANAGER="${BUILDOZER_SDK}/tools/bin/sdkmanager"
-          echo "--- Verificando sdkmanager ---"
-          ls -la "${SDKMANAGER}"
+          echo "Java version activa:"
+          java -version
 
-          # 5. Escribir las licencias ANTES de instalar paquetes
+          # 3. Escribir licencias directamente en disco (primera capa de cobertura)
           LICENSES_DIR="${BUILDOZER_SDK}/licenses"
           mkdir -p "${LICENSES_DIR}"
           printf '\n8933bad161af4178b1185d1a37fbf41ea5269c55\n24333f8a63b6825ea9c5514f83c2829b004d1fee\n' \
@@ -91,20 +92,20 @@ jobs:
           printf '\nd975f751698a77b662f1254ddbeed3901e976f5a\n' \
             > "${LICENSES_DIR}/intel-android-extra-license"
 
-          # 6. Aceptar licencias via sdkmanager también (doble cobertura)
+          # 4. Aceptar licencias via sdkmanager (segunda capa — ahora funciona con Java 17)
           yes | "${SDKMANAGER}" --sdk_root="${BUILDOZER_SDK}" --licenses 2>/dev/null || true
 
-          # 7. Instalar los paquetes que buildozer necesitará
+          # 5. Preinstalar los paquetes que buildozer necesita
           yes | "${SDKMANAGER}" --sdk_root="${BUILDOZER_SDK}" \
             "platform-tools" \
             "platforms;android-33" \
             "build-tools;33.0.2" \
             "build-tools;34.0.0" 2>/dev/null || true
 
-          # 8. Aceptar licencias una vez más tras instalar (cubre build-tools nuevas)
+          # 6. Aceptar licencias una vez más tras instalar los paquetes
           yes | "${SDKMANAGER}" --sdk_root="${BUILDOZER_SDK}" --licenses 2>/dev/null || true
 
-          echo "--- SDK Bootstrap completo ---"
+          echo "--- SDK bootstrap completo ---"
           ls "${BUILDOZER_SDK}/"
 
       - name: Clean previous local build artifacts
