@@ -8,10 +8,10 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.graphics import Color, Rectangle
 
 
-AZUL = (0.1, 0.4, 0.8, 1)          
-PLOMO_BAJO = (0.88, 0.88, 0.88, 1) 
-BLANCO = (1, 1, 1, 1)           
-NEGRO = (0, 0, 0, 1)              
+AZUL = (0.1, 0.4, 0.8, 1)
+PLOMO_BAJO = (0.88, 0.88, 0.88, 1)
+BLANCO = (1, 1, 1, 1)
+NEGRO = (0, 0, 0, 1)
 
 
 class Calculadora(BoxLayout):
@@ -20,14 +20,14 @@ class Calculadora(BoxLayout):
         super().__init__(orientation='vertical', **kwargs)
 
         self.historial = []
+        # CORRECCIÓN 1: se almacena referencia al ScreenManager desde afuera
+        self.screen_manager = None
 
-        
         with self.canvas.before:
             Color(*BLANCO)
             self.rect = Rectangle(size=self.size, pos=self.pos)
         self.bind(size=self._update_rect, pos=self._update_rect)
 
-       
         self.pantalla = TextInput(
             multiline=False,
             halign="right",
@@ -39,7 +39,6 @@ class Calculadora(BoxLayout):
         )
         self.add_widget(self.pantalla)
 
-       
         btn_historial = Button(
             text="Historial",
             font_size=20,
@@ -51,7 +50,6 @@ class Calculadora(BoxLayout):
         btn_historial.bind(on_press=self.abrir_historial)
         self.add_widget(btn_historial)
 
-        
         botones = GridLayout(cols=4, spacing=2, padding=2)
 
         teclas = [
@@ -62,7 +60,6 @@ class Calculadora(BoxLayout):
             "0", ".", "%", "="
         ]
 
-        
         for tecla in teclas:
             if tecla in ["C", "<-", "DEL", "/", "*", "-", "+", "=", "%"]:
                 color_boton = AZUL
@@ -88,16 +85,19 @@ class Calculadora(BoxLayout):
         self.rect.size = instance.size
 
     def abrir_historial(self, instance):
-        self.parent.manager.current = "historial"
+        # CORRECCIÓN 1: se usa la referencia directa al ScreenManager
+        if self.screen_manager:
+            self.screen_manager.current = "historial"
 
     def presionar(self, instancia):
         texto = instancia.text
 
+        # CORRECCIÓN 2: "C" limpia toda la pantalla; "DEL" borra el último carácter
         if texto == "C":
             self.pantalla.text = ""
-        elif texto == "<-":
-            self.pantalla.text = self.pantalla.text[:-1]
         elif texto == "DEL":
+            self.pantalla.text = self.pantalla.text[:-1]
+        elif texto == "<-":
             self.pantalla.text = ""
         elif texto == "=":
             try:
@@ -120,7 +120,6 @@ class PantallaHistorial(Screen):
         super().__init__(**kwargs)
         self.calculadora = calculadora
 
-      
         with self.canvas.before:
             Color(*BLANCO)
             self.rect = Rectangle(size=self.size, pos=self.pos)
@@ -128,28 +127,26 @@ class PantallaHistorial(Screen):
 
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
 
-    
         titulo = Label(
             text="Historial",
             font_size=28,
             size_hint=(1, 0.15),
             color=AZUL,
-            
         )
         layout.add_widget(titulo)
 
-       
+        # CORRECCIÓN 3: size_hint_y=1 para que el label ocupe el espacio disponible
         self.label_historial = Label(
             text="No hay operaciones",
             font_size=20,
             color=NEGRO,
             halign="center",
-            valign="middle"
+            valign="top",
+            size_hint=(1, 1),
         )
         self.label_historial.bind(size=self.label_historial.setter('text_size'))
         layout.add_widget(self.label_historial)
 
-        
         btn_volver = Button(
             text="Volver",
             font_size=22,
@@ -185,6 +182,9 @@ class CalculadoraApp(App):
         sm = ScreenManager()
         calculadora = Calculadora()
 
+        # CORRECCIÓN 1: se pasa la referencia del ScreenManager a la calculadora
+        calculadora.screen_manager = sm
+
         pantalla_calculadora = Screen(name="calculadora")
         pantalla_calculadora.add_widget(calculadora)
 
@@ -197,4 +197,5 @@ class CalculadoraApp(App):
 
 
 if __name__ == "__main__":
+    CalculadoraApp().run()
     CalculadoraApp().run()
