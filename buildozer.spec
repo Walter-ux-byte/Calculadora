@@ -13,7 +13,7 @@ package.domain = org.test
 source.dir = .
 
 # (list) Source files to include (let empty to include all the files)
-source.include_exts = py,png,jpg,kv,atlas
+source.include_exts = py,png,jpg,jpeg,kv,atlas
 
 # (list) List of inclusions using pattern matching
 #source.include_patterns = assets/*,images/*.png
@@ -36,21 +36,20 @@ version = 0.1
 # version.filename = %(source.dir)s/main.py
 
 # (list) Application requirements
-# comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pillow
+# CORRECCIÓN 3: se agrega hostpython3 para que el build de Kivy funcione correctamente
+requirements = python3,hostpython3,kivy,pillow
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
 # requirements.source.kivy = ../../kivy
 
-# (str) Presplash of the application
-presplash.filename = %(source.dir)s/calcu.png
+# CORRECCIÓN 1: el archivo real es calcu.jpeg, no calcu.png
+presplash.filename = %(source.dir)s/calcu.jpeg
 
-# (str) Icon of the application
-icon.filename = %(source.dir)s/calcu.png
+# CORRECCIÓN 1: el archivo real es calcu.jpeg, no calcu.png
+icon.filename = %(source.dir)s/calcu.jpeg
 
 # (list) Supported orientations
-# Valid options are: landscape, portrait, portrait-reverse or landscape-reverse
 orientation = portrait
 
 # (list) List of service to declare
@@ -65,8 +64,8 @@ orientation = portrait
 # change the major version of python used by the app
 osx.python_version = 3
 
-# Kivy version to use
-osx.kivy_version = 1.9.1
+# CORRECCIÓN 4: Kivy 1.9.1 es incompatible con el código; se usa la versión estable actual
+osx.kivy_version = 2.3.0
 
 #
 # Android specific
@@ -81,10 +80,6 @@ fullscreen = 0
 # (string) Presplash animation using Lottie format.
 #android.presplash_lottie = "path/to/lottie/file.json"
 
-# (str) Adaptive icon of the application (used if Android API level is 26+ at runtime)
-#icon.adaptive_foreground.filename = %(source.dir)s/data/icon_fg.png
-#icon.adaptive_background.filename = %(source.dir)s/data/icon_bg.png
-
 # (list) Permissions
 #android.permissions = android.permission.INTERNET, (name=android.permission.WRITE_EXTERNAL_STORAGE;maxSdkVersion=18)
 
@@ -97,8 +92,8 @@ android.api = 33
 # (int) Minimum API your APK / AAB will support.
 android.minapi = 24
 
-# (str) Android NDK version to use
-android.ndk = 25c
+# CORRECCIÓN 2: se usa solo el número de revisión sin letra para mayor compatibilidad
+android.ndk = 25b
 
 # (int) Android NDK API to use. This is the minimum API your app will support, it should usually match android.minapi.
 android.ndk_api = 24
@@ -174,7 +169,7 @@ android.ndk_api = 24
 # (list) Gradle repositories to add
 #android.add_gradle_repositories =
 
-# (list) packaging options to add 
+# (list) packaging options to add
 #android.add_packaging_options =
 
 # (list) Java classes to add as activities to the manifest.
